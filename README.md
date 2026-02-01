@@ -2,8 +2,7 @@
 
 This custom integration creates a diagnostic sensor for MQTT devices that shows the **MQTT connection state** based on a device’s MQTT *availability* or *state* topic.
 
-> [!CAUTION]
-> 🚧 This integration is still in **beta**.\
+> [!TIP]
 > If you have any questions or feedback, find me on the Home assistant community: [studioIngrid](https://community.home-assistant.io/u/studioingrid). \
 > Or reply in the [thread](https://community.home-assistant.io/t/add-connection-state-online-offline-to-every-z2m-device-or-other-mqtt-device).
 
