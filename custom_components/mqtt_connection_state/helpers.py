@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 import logging
+from typing import Any
 
 from homeassistant.components.mqtt import debug_info
 from homeassistant.core import HomeAssistant
@@ -91,3 +93,48 @@ def find_connection_topic(
             device_name,
         )
     return None
+
+
+def process_message_payload(
+    hass: HomeAssistant,
+    topic: str,
+    payload: Any,
+) -> str | None:
+    """Process unsafe payload."""
+
+    if isinstance(payload, (bytes, bytearray)):
+        payload_raw = payload.decode("utf-8", errors="ignore").strip()
+    elif isinstance(payload, (str, int, float, bool)):
+        payload_raw = str(payload).strip()
+    else:
+        _LOGGER.error(
+            "Message received on %s: %s, ERROR unsupported payload type: %s",
+            topic,
+            payload,
+            type(payload),
+        )
+        return None
+
+    if payload_raw.startswith(("{", "[")):
+        try:
+            json_payload = json.loads(payload_raw)
+        except ValueError:
+            _LOGGER.error(
+                "Message recieved on %s: %s, ERRROR Invalid JSON",
+                topic,
+                payload_raw,
+            )
+            return None
+
+        if json_payload.get("state") is not None:
+            message = json_payload.get("state")
+        elif json_payload.get("status") is not None:
+            message = json_payload.get("status")
+        elif json_payload.get("availability") is not None:
+            message = json_payload.get("availability")
+    else:
+        message = payload_raw
+
+    if str(message).strip().lower() in ("online", "on", "true", "1"):
+        return "online"
+    return "offline"
