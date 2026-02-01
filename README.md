@@ -1,9 +1,11 @@
 # 🔌 MQTT Connection State
 
-This custom integration creates a diagnostic sensor for MQTT devices that shows the **MQTT connection state** of a device based on its MQTT *availability* or *state* topic.
+This custom integration creates a diagnostic sensor for MQTT devices that shows the **MQTT connection state** based on a device’s MQTT *availability* or *state* topic.
 
 > [!CAUTION]
-> 🚧 This integration is still in **beta**.
+> 🚧 This integration is still in **beta**.\
+> If you have any questions or feedback, find me on the Home assistant community: [studioIngrid](https://community.home-assistant.io/u/studioingrid). \
+> Or reply in the [thread](https://community.home-assistant.io/t/add-connection-state-online-offline-to-every-z2m-device-or-other-mqtt-device).
 
 ## What it can do ✅
 
@@ -11,7 +13,7 @@ It can:
 
 * 🔍 **Discover** MQTT devices with connection topics
 * 🔄 **Auto-update** when device information or topics change
-* 🚨 Raise **Repair issues** when a device becomes orphaned
+* 🚨 Raise **Repair issues** for orphaned conection_state sensors
 * ⚡ Use **actions** for bulk setup in new installs
 * 🔔 Easily trigger **notification automations** using events
 
@@ -26,9 +28,9 @@ It can:
 
 ### 🧩 HACS
 
-* Go to the HACS dashboard (`/hacs/dashboard`)
-* Select the three dots in the top-right corner → **Custom repositories**
-* Fill in the repository:
+* Open the HACS dashboard (`/hacs/dashboard`)
+* Menu (⋮) → **Custom repositories**
+* Add repository:
 
 ```
 https://github.com/studioIngrid/mqtt_connection_state
@@ -37,44 +39,39 @@ https://github.com/studioIngrid/mqtt_connection_state
 Type: `integration`
 
 * Click *Add*, then close the popup
-* Search for:
-
-```
-MQTT connection state
-```
-
+* Search for: `MQTT connection state`
 * Click *Download* (bottom right)
 * Restart Home Assistant
 * Go to *Settings* → *Devices & Services* → *Integrations*
 * Manually add the first device:
    *Add integration* → search for *MQTT connection state → *Select a device*
-* Within the first 10 minutes, discovered devices should appear for easy configuration
+* Newly discovered devices should appear within ~10 minutes
 * For configuring multiple devices, see [Actions](#actions)
 
 ### 🛠️ Manual
 
-The prefered method is using HACS, their you can be informed about new releases.
+HACS is recommended, as it provides update notifications.
 
-* Download the contents of this repository
-* Add the folder to your config at:
-   `config/custom_components/mqtt_connection_state`
+* Download this repository
+* Copy it to:
+  `config/custom_components/mqtt_connection_state`
 * Restart Home Assistant
-* Manually add the first device:
-    *Add integration* → search for *MQTT connection state → *Select a device*
-* Within the first 10 minutes, discovered devices should appear for easy configuration
-* For configuring multiple devices, see [Actions](#actions)
+* Add the first device as described above
 
 ### 🐝 Zigbee2MQTT
 
-Availability is **disabled by default** in Zigbee2MQTT. If no availability topic is published, the device will **not** be discovered by this integration.
+Availability is **disabled by default** in Zigbee2MQTT.
+If no availability topic is published, the device will **not** be discovered.
 
-You can enable availability either in the **web UI** or via `configuration.yaml`. See the official documentation for full details:
-[Zigbee2MQTT Device Availability](https://www.zigbee2mqtt.io/guide/configuration/device-availability.html)
+Enable availability via the **web UI** or `configuration.yaml`.
+Official docs:
+[https://www.zigbee2mqtt.io/guide/configuration/device-availability.html](https://www.zigbee2mqtt.io/guide/configuration/device-availability.html)
 
 #### Short version
 
-**Z2M add-on users**: Open the Zigbee2MQTT web UI → Settings → Settings tab → Availability sub-tab → enable Availability.
-Restart the add-on for the change to take effect.
+**Z2M add-on users**
+Zigbee2MQTT web UI → *Settings* → *Settings tab* → *Availability* → enable
+Restart the add-on.
 
 **Z2M Docker users**: Edit `configuration.yaml` and add or update:
 
@@ -83,12 +80,12 @@ availability:
   enabled: true
 ```
 
-After enabling this, availability topics will be published and devices can be discovered correctly ✅
+After enabling this, availability topics will be published and devices can be discovered correctly ✅.
 
 > 💡 **Tip — keep “last seen” available even when a device is offline**
-> Add or update the following in `configuration.yaml` of your zigbee :
+> Add or update the following in `configuration.yaml` of your zigbee instance:
 >
-> ```
+> ```yaml
 > device_options:
 >   homeassistant:
 >     last_seen:
@@ -96,41 +93,82 @@ After enabling this, availability topics will be published and devices can be di
 >       availability: []
 > ```
 
+### 🌐 Other MQTT devices
+
+The integration determines the connection state by evaluating **state messages** published to MQTT. The payload may be either:
+
+* A **plain string**, or
+* A **JSON object** containing one of the following keys:
+
+  * `state`
+  * `status`
+  * `availability`
+
+The following values are treated as **online** (case-insensitive):
+
+`true`, `online`, `on`, `1`
+
+All other values are **offline**.
+
+#### Examples
+
+Plain string:
+
+```
+online
+```
+
+JSON payload:
+
+```
+{
+  "state": "online"
+}
+OR
+{
+  "availability": "true"
+}
+```
+
+> 💬 **Feedback welcome**
+> If your device publishes availability or state messages in a different format, please open an issue or share an example payload (found in the debug log, so support can be improved.
+
 ## ✨ Features
 
 ### 🔍 Automatic Discovery
 
-* Periodically scans the device registry for MQTT devices with an availability or status topic
-* If multiple topics are found, the last found topic is used
+* Periodically scans the device registry for MQTT devices with availability or status topics
+* If multiple topics are found, the last one is used
 
 ### 🚨 Orphan Detection & Repairs
 
-* If the connection sensor loses its parent (e.g. device drops off), a **Home Assistant Repair issue** is raised
-* When the parent is rediscovered, the issue is automatically closed
-* Alternatively, you can delete the connection sensor directly from the issue
+* Raises a **Repair issue** if a connection sensor loses its parent (e.g. device drops off)
+* Automatically resolves the issue when the device is rediscovered
+* Sensors can also be removed directly from the Repair issue
 
 ### 🧩 Entity Behavior
 
-The device gets one entity: `binary_sensor.<device_name>_connection_state`
+Each device gets one entity: `binary_sensor.<device_name>_connection_state`
 
-* Displayed names can be translated
-* Currently supported languages: **EN** and **NL**
+* Entity values can be translated to the users defined language
+* Entity names are translated to the server general language
+* Currently supported languages: **EN**, **NL** and **SV**
 
 ### ⚡ Bulk setup
 
-The integration can automatically complete configuration for discovered devices.
-This avoids having to click *Add* a hundred (or more 😉) times.
-There are two actions you can use to list devices available for setup, and bulk confirm configuration. See [Actions](#actions) for details.
+Automatically completes setup for discovered devices, avoiding repetitive clicking.
+Use actions to list devices and confirm them in bulk. See [Actions](#actions).
 
 ### 🔔 Events
 
-This integration fires an event on **every connection state change**, which makes event-based automations the most flexible and scalable approach.
+An event is fired on **every connection state change**, enabling flexible and scalable automations.
 
 Example of event format:
 
 ```
 event_type: mqtt_connection_state_changed
 data:
+  topic: zigbee2mqtt/livingroom_motion/availability
   state: offline
   device_id: c940be963f2b3080a1d48fc5f9973298
   device_name: Livingroom motion
@@ -205,8 +243,6 @@ You can use these fields directly in triggers for automations.
 
 Create an automation triggered by the `mqtt_connection_state_changed` event.
 
-> **Recommended:** Add a condition that checks whether your bridge (for example Zigbee2MQTT) is online. This helps prevent a burst of notifications during Home Assistant startup.
-
 Event type:
 
 ```
@@ -235,12 +271,7 @@ triggers:
     event_type: mqtt_connection_state_changed
     event_data:
       state: offline
-conditions:
-  - condition: state
-    entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state
-    state: "on"
-    for:
-      minutes: 1
+conditions: []
 actions:
   - alias: Report offline devices in HA notifications
     action: persistent_notification.create

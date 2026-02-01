@@ -15,7 +15,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.components.mqtt import async_subscribe, models
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo, async_generate_entity_id
@@ -23,7 +23,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_device_registry_updated_event
 
 from .const import CONF_DEVICE_ID, CONF_TOPIC, DOMAIN
-from .helpers import find_connection_topic
+from .helpers import find_connection_topic, process_message_payload
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
         _LOGGER.debug("Setup Binary Sensor: %s", entry.title)
 
         self.hass = hass
+        self._startup_listener = None
         self.entry = entry
         self.entity_id = async_generate_entity_id(
             BINARY_SENSOR_DOMAIN + ".{}_connection_state", entry.title, hass=hass
@@ -68,7 +69,7 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
         )
 
         self._attr_unique_id = f"{entry.entry_id}_connection_state"
-        self._attr_is_on = False
+        self._attr_is_on = None
         self._attr_available = True
         self._connection_topic: str | None = entry.data.get(CONF_TOPIC)
 
@@ -175,17 +176,17 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
                 self._handle_message_updates(None)
                 return
 
-            try:
-                payload = json.loads(message.payload)
-            except ValueError:
-                _LOGGER.warning(
-                    "Invalid JSON payload on %s: %s",
-                    message.topic,
-                    message.payload,
-                )
-                return
+            self.hass.async_create_task(message_received_process(message))
 
-            self._handle_message_updates(payload)
+        async def message_received_process(message: models.ReceiveMessage) -> None:
+            state_message = await self.hass.async_add_executor_job(
+                process_message_payload,
+                self.hass,
+                message.topic,
+                message.payload,
+            )
+
+            self._handle_message_updates(message.topic, state_message)
 
         self._message_received = message_received
 
@@ -227,35 +228,43 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
             self._unsub_bridge()
             self._unsub_bridge = None
 
-    def _handle_message_updates(self, data: dict[str, Any] | None) -> None:
+    def _handle_message_updates(self, state_topic, state_message: str | None) -> None:
         old_state = self._attr_is_on
         old_available = self._attr_available
 
-        if not data:
+        if not state_message:
             self._attr_available = False
             if old_available:
                 self.async_write_ha_state()
             return
 
-        self._attr_is_on = data.get("state") == "online"
+        self._attr_is_on = state_message == "online"
         self._attr_available = True
 
         if old_state != self._attr_is_on or not old_available:
-            if self._attr_is_on:
-                event_data = {
-                    "state": "online",
-                    "device_id": self._device_id,
-                    "device_name": self.device_entry.name,
-                    "entity_id": self.entity_id,
-                }
-            else:
-                event_data = {
-                    "state": "offline",
-                    "device_id": self._device_id,
-                    "device_name": self.device_entry.name,
-                    "entity_id": self.entity_id,
-                }
-            self.hass.bus.async_fire(DOMAIN + "_changed", event_data)
+            event_data = {
+                "topic": state_topic,
+                "state": "online" if self._attr_is_on else "offline",
+                "device_id": self._device_id,
+                "device_name": self.device_entry.name,
+                "entity_id": self.entity_id,
+            }
+
+            def _fire_event(_event=None):
+                self.hass.bus.fire(
+                    DOMAIN + "_changed",
+                    event_data,
+                )
+
+            if self.hass.is_running:
+                _fire_event()
+                return
+            if self._startup_listener is None:
+                self._startup_listener = self.hass.bus.async_listen_once(
+                    EVENT_HOMEASSISTANT_STARTED,
+                    _fire_event,
+                )
+
             self.async_write_ha_state()
 
     @property
