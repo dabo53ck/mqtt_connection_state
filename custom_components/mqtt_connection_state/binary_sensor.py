@@ -232,16 +232,19 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
         old_state = self._attr_is_on
         old_available = self._attr_available
 
-        if not state_message:
+        if state_message is None:
             self._attr_available = False
             if old_available:
                 self.async_write_ha_state()
             return
 
         self._attr_is_on = state_message == "online"
+
         self._attr_available = True
 
-        if old_state != self._attr_is_on or not old_available:
+        if old_state != self._attr_is_on or old_available != self._attr_available:
+            self.async_write_ha_state()
+
             event_data = {
                 "topic": state_topic,
                 "state": "online" if self._attr_is_on else "offline",
@@ -264,8 +267,6 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
                     EVENT_HOMEASSISTANT_STARTED,
                     _fire_event,
                 )
-
-            self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
