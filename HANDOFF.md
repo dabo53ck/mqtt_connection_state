@@ -42,6 +42,8 @@ merging). This integration:
 - **`manifest.json`** `"homeassistant": "2026.8.0"`, `"version": "1.0.2-test4"` (TEST MARKER).
 - **`translations/{en,nl,sv}.json`** — removed `issues.orphaned_device`; added
   `issues.duplicate_entries`.
+- **`translations/de.json`** — new full German translation (this instance is
+  Europe/Berlin with German device names).
 
 ## Verified on the live instance (core-2026.8.3, ~77 real devices)
 

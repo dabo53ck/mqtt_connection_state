@@ -1,0 +1,48 @@
+{
+  "title": "MQTT-Verbindungsstatus",
+  "config": {
+    "step": {
+      "user": {
+        "title": "MQTT-Verbindungsstatus",
+        "description": "Wähle ein Gerät zur Konfiguration aus.",
+        "data": {
+          "device_id": "Gerät"
+        }
+      },
+      "from_discovery": {
+        "title": "MQTT-Verbindungsstatus",
+        "description": "Aus erkannter Quelle konfigurieren: \"{device_name}\".\nThema: \"{connection_topic}\"."
+      }
+    },
+    "error": {
+      "unknown": "Ein unbekannter Fehler ist aufgetreten",
+      "device_unknown": "Dies ist ein unbekanntes Gerät, bitte ändere deine Auswahl.",
+      "no_connection_topic": "Kein Thema gefunden, das auf /availability oder /state endet"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection_state": {
+        "name": "Verbindung",
+        "state": {
+          "on": "Verbunden",
+          "off": "Getrennt"
+        }
+      }
+    }
+  },
+  "issues": {
+    "duplicate_entries": {
+      "title": "Doppelte Konfigurationseinträge",
+      "description": "MQTT-Verbindungsstatus hat {count} doppelte Konfigurationseinträge. Sie wurden von der Erkennung angelegt, nachdem das Home-Assistant-Update 2026.8 die Gerätekennungen geändert hat. Die Behebung entfernt die überzähligen Einträge und behält einen pro Gerät; die verbleibenden Verbindungssensoren sind bereits mit den richtigen Geräten verknüpft, und sonst wird nichts geändert. Um zuerst die genaue Liste zu sehen, führe die Aktion \"MQTT-Verbindungsstatus: Doppelte Konfigurationseinträge entfernen\" mit aktiviertem Probelauf aus.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Doppelte Konfigurationseinträge entfernen",
+            "description": "Bestätige das Entfernen der doppelten Einträge, die diese Integration nach dem Home-Assistant-Update 2026.8 angelegt hat. Ein Eintrag pro Gerät bleibt erhalten."
+          }
+        }
+      }
+    }
+  }
+}
