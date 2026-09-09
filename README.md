@@ -198,6 +198,10 @@ Use actions to list devices and confirm them in bulk. See [Actions](#actions).
 
 An event is fired on **every connection state change**, enabling flexible and scalable automations.
 
+The event fires only on a real online↔offline transition. It is **not** fired for the
+state a device already has when Home Assistant starts (that is a restore, not a change) —
+for startup state, read the `binary_sensor` or trigger on `homeassistant.start`.
+
 Example of event format:
 
 ```

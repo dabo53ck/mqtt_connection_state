@@ -20,7 +20,7 @@ from homeassistant.components.mqtt import (
     models,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EntityCategory
+from homeassistant.const import EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -141,7 +141,6 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
         _LOGGER.debug("Setup Binary Sensor: %s", entry.title)
 
         self.hass = hass
-        self._startup_listener = None
         self.entry = entry
         self.entity_id = async_generate_entity_id(
             BINARY_SENSOR_DOMAIN + ".{}_connection_state", entry.title, hass=hass
@@ -345,28 +344,24 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
         if old_state != self._attr_is_on or old_available != self._attr_available:
             self.async_write_ha_state()
 
-            event_data = {
-                "topic": state_topic,
-                "state": "online" if self._attr_is_on else "offline",
-                "device_id": self._device_id,
-                "device_name": self._device_name,
-                "entity_id": self.entity_id,
-            }
-
-            def _fire_event(_event=None):
-                self.hass.bus.fire(
-                    EVENT_CHANGED,
-                    event_data,
-                )
-
-            if self.hass.is_running:
-                _fire_event()
+            # A None -> on/off update is the initial state being restored, not a
+            # change: every HA restart replays the retained availability message,
+            # so firing an event per device on every restart would be noise. The
+            # entity state already carries the value; only genuine on<->off
+            # transitions are events.
+            if old_state is None:
                 return
-            if self._startup_listener is None:
-                self._startup_listener = self.hass.bus.async_listen_once(
-                    EVENT_HOMEASSISTANT_STARTED,
-                    _fire_event,
-                )
+
+            self.hass.bus.async_fire(
+                EVENT_CHANGED,
+                {
+                    "topic": state_topic,
+                    "state": "online" if self._attr_is_on else "offline",
+                    "device_id": self._device_id,
+                    "device_name": self._device_name,
+                    "entity_id": self.entity_id,
+                },
+            )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
