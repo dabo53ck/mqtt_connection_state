@@ -9,7 +9,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, selector
 from homeassistant.helpers.entity_component import DiscoveryInfoType
 
-from .const import CONF_DEVICE_ID, CONF_ERROR_BASE, CONF_TOPIC, DOMAIN
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_ERROR_BASE,
+    CONF_KIND,
+    CONF_TOPIC,
+    DOMAIN,
+    KIND_SYSTEM,
+)
 from .helpers import find_connection_topic
 
 
@@ -28,6 +35,16 @@ class ConfigFlowConfig(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle integration discovery."""
         self._discovery_info = discovery_info
+
+        # The integration auto-discovers itself once to create the single entry
+        # that owns the broker/bridge sensors. No device, no user step.
+        if discovery_info.get(CONF_KIND) == KIND_SYSTEM:
+            await self.async_set_unique_id(f"{DOMAIN}_{KIND_SYSTEM}")
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(
+                title="MQTT connection state",
+                data={CONF_KIND: KIND_SYSTEM},
+            )
 
         # Unique ID to allow ignore
         await self.async_set_unique_id(discovery_info[CONF_DEVICE_ID])

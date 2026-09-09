@@ -12,7 +12,7 @@ from homeassistant.components.mqtt import (
     async_wait_for_mqtt_client,
     models,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import (
     Event,
@@ -25,7 +25,8 @@ from homeassistant.core import (
 )
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, discovery_flow
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_device_registry_updated_event,
     async_track_time_interval,
@@ -38,9 +39,12 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_DEVICE_ID,
     CONF_DISCOVERY_INTERVAL,
+    CONF_KIND,
     CONF_TOPIC,
     DOMAIN,
+    KIND_SYSTEM,
     SERV_ADD_NEW_DEVICES,
+    SIGNAL_NEW_BRIDGE,
 )
 from .discovery import async_discover_devices, async_trigger_discovery
 from .helpers import async_sync_duplicate_issue, resolve_source_device_id
@@ -70,17 +74,34 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _LOGGER.error("MQTT integration not available")
         return False
 
+    # Auto-create the single "system" entry that owns the broker and bridge
+    # connection sensors. Guarded so exactly one ever exists (see config_flow).
+    if not any(
+        entry.data.get(CONF_KIND) == KIND_SYSTEM
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    ):
+        discovery_flow.async_create_flow(
+            hass,
+            DOMAIN,
+            context={"source": SOURCE_INTEGRATION_DISCOVERY},
+            data={CONF_KIND: KIND_SYSTEM},
+        )
+
     async def _async_discovery(now=None) -> None:
         async_trigger_discovery(hass, await async_discover_devices(hass))
 
     @callback
     def _on_bridge_state(message: models.ReceiveMessage) -> None:
+        # Any "<root>/bridge/state" message means that root is an MQTT bridge;
+        # tell the system platform so it can add a sensor for it if new.
+        async_dispatcher_send(hass, SIGNAL_NEW_BRIDGE, message.topic.split("/", 1)[0])
+
         try:
             payload = json.loads(message.payload)
         except ValueError:
             return
 
-        if payload["state"] == "online":
+        if payload.get("state") == "online":
             _LOGGER.debug(
                 "Bridge online on %s, running discovery",
                 message.topic,
@@ -201,12 +222,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a config entry."""
 
+    hass.data.setdefault(DOMAIN, {})
+
+    # The auto-created "system" entry has no device; it only carries the
+    # broker/bridge sensors. Skip all per-device heal/link/title logic.
+    if entry.data.get(CONF_KIND) == KIND_SYSTEM:
+        _LOGGER.debug("Setup system entry (broker/bridge connection sensors)")
+        await hass.config_entries.async_forward_entry_setups(
+            entry, [Platform.BINARY_SENSOR]
+        )
+        return True
+
     _LOGGER.debug(
         "Setup entry: %s, listening to topic: %s",
         entry.title,
         entry.data.get(CONF_TOPIC),
     )
-    hass.data.setdefault(DOMAIN, {})
     device_id = entry.data.get(CONF_DEVICE_ID)
 
     # The stored device id may be a pre-2026.8 merged-device id that the 2026.8

@@ -28,6 +28,20 @@
           "on": "Connected",
           "off": "Disconnected"
         }
+      },
+      "broker_connection_state": {
+        "name": "Connection",
+        "state": {
+          "on": "Connected",
+          "off": "Disconnected"
+        }
+      },
+      "bridge_connection_state": {
+        "name": "Bridge",
+        "state": {
+          "on": "Online",
+          "off": "Offline"
+        }
       }
     }
   },
