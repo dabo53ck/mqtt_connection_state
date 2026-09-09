@@ -13,16 +13,33 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.components.mqtt import async_subscribe, models
+from homeassistant.components.mqtt import (
+    async_subscribe,
+    async_subscribe_connection_status,
+    is_connected,
+    models,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_device_registry_updated_event
 
-from .const import CONF_DEVICE_ID, CONF_TOPIC, DOMAIN
+from .const import (
+    BRIDGE_TRANSLATION_KEY,
+    BROKER_TRANSLATION_KEY,
+    CONF_DEVICE_ID,
+    CONF_KIND,
+    CONF_TOPIC,
+    DOMAIN,
+    EVENT_CHANGED,
+    KIND_SYSTEM,
+    SIGNAL_NEW_BRIDGE,
+)
 from .helpers import (
     find_connection_topic,
     process_message_payload,
@@ -38,8 +55,76 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Initialize from the config entry."""
-    # _LOGGER.info("Initialize binary_sensor: %s", entry.title)
+    if entry.data.get(CONF_KIND) == KIND_SYSTEM:
+        _async_setup_system_entities(hass, entry, async_add_entities)
+        return
+
     async_add_entities([MqttConnectionSensorEntity(hass, entry)])
+
+
+@callback
+def _configured_bridge_roots(hass: HomeAssistant) -> set[str]:
+    """Return the distinct MQTT root prefixes of every configured device topic."""
+    roots: set[str] = set()
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.data.get(CONF_KIND) == KIND_SYSTEM:
+            continue
+        topic = entry.data.get(CONF_TOPIC)
+        if isinstance(topic, str) and "/" in topic:
+            roots.add(topic.split("/", 1)[0])
+    return roots
+
+
+@callback
+def _async_setup_system_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Create the broker sensor plus one sensor per known MQTT bridge."""
+    known: set[str] = _configured_bridge_roots(hass)
+
+    entities: list[BinarySensorEntity] = [MqttBrokerConnectionSensorEntity(entry)]
+    entities.extend(
+        MqttBridgeConnectionSensorEntity(hass, entry, root) for root in sorted(known)
+    )
+    async_add_entities(entities)
+
+    @callback
+    def _async_add_bridge(root: str) -> None:
+        if root in known:
+            return
+        known.add(root)
+        _LOGGER.debug("New MQTT bridge seen: %s", root)
+        async_add_entities([MqttBridgeConnectionSensorEntity(hass, entry, root)])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_NEW_BRIDGE, _async_add_bridge)
+    )
+
+
+@callback
+def _fire_changed_event(
+    hass: HomeAssistant,
+    *,
+    topic: str | None,
+    is_on: bool,
+    device_name: str,
+    entity_id: str,
+) -> None:
+    """Fire the shared connection-state event (broker/bridge carry no device_id)."""
+    if not hass.is_running:
+        return
+    hass.bus.async_fire(
+        EVENT_CHANGED,
+        {
+            "topic": topic,
+            "state": "online" if is_on else "offline",
+            "device_id": None,
+            "device_name": device_name,
+            "entity_id": entity_id,
+        },
+    )
 
 
 class MqttConnectionSensorEntity(BinarySensorEntity):
@@ -270,7 +355,7 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
 
             def _fire_event(_event=None):
                 self.hass.bus.fire(
-                    DOMAIN + "_changed",
+                    EVENT_CHANGED,
                     event_data,
                 )
 
@@ -289,3 +374,133 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
         return {
             "topic": self._connection_topic,
         }
+
+
+class MqttBrokerConnectionSensorEntity(BinarySensorEntity):
+    """Connectivity between Home Assistant and the MQTT broker.
+
+    Fed by Home Assistant's own MQTT client status, not by a topic, so it stays
+    accurate even when the broker is unreachable (no messages arrive then).
+    """
+
+    _attr_should_poll = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = BROKER_TRANSLATION_KEY
+    _attr_available = True  # never tie availability to the broker being up
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        """Initialize the broker connection sensor."""
+        self.entry = entry
+        self._attr_unique_id = f"{DOMAIN}_broker"
+        self.entity_id = f"{BINARY_SENSOR_DOMAIN}.mqtt_broker_connection_state"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "broker")},
+            entry_type=DeviceEntryType.SERVICE,
+            name="MQTT Broker",
+        )
+        self._attr_is_on = None
+
+    async def async_added_to_hass(self) -> None:
+        """Seed the state and subscribe to MQTT client connection changes."""
+        try:
+            self._attr_is_on = is_connected(self.hass)
+        except KeyError:
+            self._attr_is_on = None
+
+        @callback
+        def _connection_changed(connected: bool) -> None:
+            if connected == self._attr_is_on:
+                return
+            self._attr_is_on = connected
+            self.async_write_ha_state()
+            _fire_changed_event(
+                self.hass,
+                topic=None,
+                is_on=connected,
+                device_name="MQTT Broker",
+                entity_id=self.entity_id,
+            )
+
+        self.async_on_remove(
+            async_subscribe_connection_status(self.hass, _connection_changed)
+        )
+
+
+class MqttBridgeConnectionSensorEntity(BinarySensorEntity):
+    """Online state of one MQTT bridge, e.g. a Zigbee2MQTT instance.
+
+    Reads ``<root>/bridge/state``. While the broker is unreachable the state is
+    unknowable, so the sensor reports ``unavailable`` until it reconnects.
+    """
+
+    _attr_should_poll = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = BRIDGE_TRANSLATION_KEY
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, root: str) -> None:
+        """Initialize a bridge connection sensor for one MQTT root prefix."""
+        self.entry = entry
+        self._root = root
+        self._state_topic = f"{root}/bridge/state"
+        self._attr_unique_id = f"{DOMAIN}_bridge_{root}"
+        self.entity_id = async_generate_entity_id(
+            BINARY_SENSOR_DOMAIN + ".{}_bridge_connection_state", root, hass=hass
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"bridge_{root}")},
+            entry_type=DeviceEntryType.SERVICE,
+            name=root,
+        )
+        self._attr_is_on = None
+        self._attr_available = True
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to the bridge state topic and broker connection changes."""
+        try:
+            self._attr_available = is_connected(self.hass)
+        except KeyError:
+            pass
+
+        @callback
+        def _message(message: models.ReceiveMessage) -> None:
+            self.hass.async_create_task(self._async_handle_message(message))
+
+        self.async_on_remove(
+            await async_subscribe(self.hass, self._state_topic, _message)
+        )
+
+        @callback
+        def _connection_changed(connected: bool) -> None:
+            if bool(connected) == self._attr_available:
+                return
+            self._attr_available = bool(connected)
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_subscribe_connection_status(self.hass, _connection_changed)
+        )
+
+    async def _async_handle_message(self, message: models.ReceiveMessage) -> None:
+        result = await self.hass.async_add_executor_job(
+            process_message_payload,
+            self.hass,
+            message.topic,
+            message.payload,
+        )
+        is_on = result == "online"
+        if is_on == self._attr_is_on and self._attr_available:
+            return
+        self._attr_is_on = is_on
+        self._attr_available = True
+        self.async_write_ha_state()
+        _fire_changed_event(
+            self.hass,
+            topic=message.topic,
+            is_on=is_on,
+            device_name=f"{self._root} bridge",
+            entity_id=self.entity_id,
+        )

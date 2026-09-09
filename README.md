@@ -148,6 +148,39 @@ OR
   `mqtt_connection_state.remove_duplicate_entries` action
   (`dry_run` defaults to a safe preview; set `dry_run: false` to remove)
 
+### 🩺 Broker & Bridge monitoring
+
+Two extra sensors appear automatically (no setup) to catch outages the per-device
+sensors can't see:
+
+* **`binary_sensor.mqtt_broker_connection_state`** — is Home Assistant connected to
+  the MQTT broker (e.g. Mosquitto)? It is fed by Home Assistant's own MQTT client
+  status, not by a topic, so it stays correct even when the broker is unreachable and
+  no messages arrive. It is never `unavailable`.
+* **`binary_sensor.<instance>_bridge_connection_state`** — one per Zigbee2MQTT
+  instance (from `<instance>/bridge/state`), e.g.
+  `binary_sensor.zigbee2mqtt_bridge_connection_state`. While the broker is down the
+  bridge state is unknowable, so these report `unavailable` and recover on reconnect.
+
+These live under a single hidden **MQTT connection state** entry; if you delete it, it
+is recreated on the next restart.
+
+Example: notify when the broker drops.
+
+```yaml
+alias: MQTT broker offline
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.mqtt_broker_connection_state
+    to: "off"
+    for: "00:01:00"
+actions:
+  - action: notify.mobile_app_iphone
+    data:
+      title: MQTT broker offline
+      message: Home Assistant lost the connection to the MQTT broker.
+```
+
 ### 🧩 Entity Behavior
 
 Each device gets one entity: `binary_sensor.<device_name>_connection_state`
@@ -176,6 +209,10 @@ data:
   device_name: Livingroom motion
   entity_id: binary_sensor.livingroom_motion_connection_state
 ```
+
+The broker and bridge sensors fire the **same** event, with `device_id: null` and
+`device_name` set to `MQTT Broker` / `<instance> bridge` (the broker event has
+`topic: null`).
 
 ## ⚙️ Actions
 

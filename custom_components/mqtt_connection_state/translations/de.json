@@ -28,6 +28,20 @@
           "on": "Verbunden",
           "off": "Getrennt"
         }
+      },
+      "broker_connection_state": {
+        "name": "Verbindung",
+        "state": {
+          "on": "Verbunden",
+          "off": "Getrennt"
+        }
+      },
+      "bridge_connection_state": {
+        "name": "Bridge",
+        "state": {
+          "on": "Online",
+          "off": "Offline"
+        }
       }
     }
   },
