@@ -28,6 +28,20 @@
           "on": "Verbonden",
           "off": "Verbroken"
         }
+      },
+      "broker_connection_state": {
+        "name": "Verbinding",
+        "state": {
+          "on": "Verbonden",
+          "off": "Verbroken"
+        }
+      },
+      "bridge_connection_state": {
+        "name": "Bridge",
+        "state": {
+          "on": "Online",
+          "off": "Offline"
+        }
       }
     }
   },
