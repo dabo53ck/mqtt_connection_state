@@ -272,7 +272,7 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
             )
 
             if not message.payload:
-                self._handle_message_updates(None)
+                self._handle_message_updates(None, None)
                 return
 
             self.hass.async_create_task(message_received_process(message))

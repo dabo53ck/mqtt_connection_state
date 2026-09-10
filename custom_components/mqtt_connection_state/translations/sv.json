@@ -47,13 +47,12 @@
   },
   "issues": {
     "duplicate_entries": {
-      "title": "Dubbletter av konfigurationsposter",
-      "description": "MQTT anslutningsstatus har {count} dubbletter av konfigurationsposter. De skapades av identifieringen efter att Home Assistant 2026.8-uppdateringen ändrade enheternas identifierare. Att åtgärda detta tar bort de extra posterna och behåller en per enhet; anslutningssensorerna som blir kvar är redan kopplade till rätt enheter och inget annat ändras. Kör först åtgärden \"MQTT anslutningsstatus: Ta bort dubbletter av konfigurationsposter\" med testkörning aktiverad för att se hela listan.",
+      "title": "Dubbletter av konfigurationsposter ({count})",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Ta bort dubbletter av konfigurationsposter",
-            "description": "Klicka på Skicka för att ta bort de dubbletter som den här integrationen skapade efter Home Assistant 2026.8-uppdateringen. En post per enhet behålls."
+            "description": "Identifieringen skapade {count} dubblettposter efter att Home Assistant 2026.8-uppdateringen ändrade enheternas identifierare. När du skickar tas de extra bort och en post per enhet behålls; anslutningssensorerna som blir kvar är redan kopplade till rätt enheter och inget annat ändras."
           }
         }
       }

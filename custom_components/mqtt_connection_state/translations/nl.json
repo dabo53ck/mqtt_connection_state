@@ -47,13 +47,12 @@
   },
   "issues": {
     "duplicate_entries": {
-      "title": "Dubbele configuratie-items",
-      "description": "MQTT connection state heeft {count} dubbele configuratie-items. Deze zijn door detectie aangemaakt nadat de Home Assistant 2026.8-update de apparaat-identifiers wijzigde. Dit oplossen verwijdert de extra items en houdt er één per apparaat over; de overgebleven verbindingssensoren zijn al aan de juiste apparaten gekoppeld en er verandert verder niets. Voer eerst de actie \"MQTT connection state: Dubbele configuratie-items verwijderen\" met testrun ingeschakeld uit om de volledige lijst te zien.",
+      "title": "Dubbele configuratie-items ({count})",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Dubbele configuratie-items verwijderen",
-            "description": "Klik op Verzenden om de dubbele items te verwijderen die deze integratie na de Home Assistant 2026.8-update heeft aangemaakt. Er blijft één item per apparaat over."
+            "description": "Detectie maakte {count} dubbele items aan nadat de Home Assistant 2026.8-update de apparaat-identifiers wijzigde. Bij verzenden worden de extra items verwijderd en blijft er één per apparaat over; de overgebleven verbindingssensoren zijn al aan de juiste apparaten gekoppeld en er verandert verder niets."
           }
         }
       }
