@@ -1,0 +1,22 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          # HA 2026.3+ requires Python 3.14; the integration targets 2026.8+.
+          python-version: "3.14"
+      - run: >
+          pip install homeassistant
+          pytest-homeassistant-custom-component pytest-cov
+      - run: pytest --cov=custom_components/mqtt_connection_state --cov-report=term-missing

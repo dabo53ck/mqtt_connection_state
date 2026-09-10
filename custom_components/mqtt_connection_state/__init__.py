@@ -25,7 +25,11 @@ from homeassistant.core import (
 )
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr, discovery_flow
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    discovery_flow,
+)
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_device_registry_updated_event,
@@ -51,6 +55,10 @@ from .helpers import async_sync_duplicate_issue, resolve_source_device_id
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
+
+# This integration is only configured via config entries; it exposes no YAML
+# schema. Required because it implements async_setup (for the global discovery).
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 SCHEMA_NEW_CONFIG_ENTRY = vol.Schema({vol.Required("list"): str})
 

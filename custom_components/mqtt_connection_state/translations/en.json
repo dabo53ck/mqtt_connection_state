@@ -47,13 +47,12 @@
   },
   "issues": {
     "duplicate_entries": {
-      "title": "Duplicate configuration entries",
-      "description": "MQTT connection state has {count} duplicate configuration entries. They were created by discovery after the Home Assistant 2026.8 update changed device identifiers. Fixing this removes the extra entries and keeps one per device; the connection sensors that remain are already linked to the correct devices, and nothing else is changed. To see the exact list first, run the action \"MQTT connection state: Remove duplicate config entries\" with dry run enabled.",
+      "title": "Duplicate configuration entries ({count})",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Remove duplicate configuration entries",
-            "description": "Click Submit to remove the duplicate entries this integration created after the Home Assistant 2026.8 update. One entry per device is kept."
+            "description": "Discovery created {count} duplicate entries after the Home Assistant 2026.8 update changed device identifiers. Submitting removes the extras and keeps one entry per device; the remaining connection sensors are already linked to the correct devices and nothing else changes."
           }
         }
       }

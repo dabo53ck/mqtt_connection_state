@@ -160,7 +160,7 @@ async def async_remove_duplicate_entries(
     for entry in remove:
         try:
             await hass.config_entries.async_remove(entry.entry_id)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.exception("Failed to remove duplicate entry %s", entry.entry_id)
             failed.append(entry)
         else:
@@ -274,6 +274,7 @@ def process_message_payload(
         )
         return None
 
+    message: Any = payload_raw
     if payload_raw.startswith(("{", "[")):
         try:
             json_payload = json.loads(payload_raw)
@@ -285,14 +286,11 @@ def process_message_payload(
             )
             return None
 
-        if json_payload.get("state") is not None:
-            message = json_payload.get("state")
-        elif json_payload.get("status") is not None:
-            message = json_payload.get("status")
-        elif json_payload.get("availability") is not None:
-            message = json_payload.get("availability")
-    else:
-        message = payload_raw
+        if isinstance(json_payload, dict):
+            for key in ("state", "status", "availability"):
+                if json_payload.get(key) is not None:
+                    message = json_payload.get(key)
+                    break
 
     if str(message).strip().lower() in ("online", "on", "true", "1"):
         return "online"
