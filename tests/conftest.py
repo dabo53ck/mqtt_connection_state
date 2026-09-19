@@ -35,6 +35,33 @@ def expected_lingering_timers() -> bool:
     return True
 
 
+@pytest.fixture(autouse=True)
+def _no_ha_deprecation_reports(caplog: pytest.LogCaptureFixture):
+    """Fail any test in which HA reports a deprecated API use by this component.
+
+    Home Assistant logs "Detected that custom integration '<domain>' ..." for a
+    deprecated call and stops supporting it a year later, so a regression here is
+    only ever visible in a log line (CI runs against the latest HA release).
+    """
+    yield
+    # caplog.records only holds the current phase (teardown, here), so the setup
+    # and call phases have to be read explicitly.
+    records = [
+        *caplog.get_records("setup"),
+        *caplog.get_records("call"),
+        *caplog.records,
+    ]
+    reports = [
+        record.getMessage()
+        for record in records
+        if record.name == "homeassistant.helpers.frame"
+        and f"custom integration '{DOMAIN}'" in record.getMessage()
+    ]
+    assert not reports, "Home Assistant reported a deprecated API use:\n" + "\n".join(
+        reports
+    )
+
+
 @pytest.fixture
 def source_device(hass: HomeAssistant, mqtt_mock) -> dr.DeviceEntry:
     """An mqtt-owned device that a connection sensor attaches to."""
