@@ -48,33 +48,31 @@ def resolve_source_device_id(
     device_registry = dr.async_get(hass)
 
     composite_id: str | None = None
-    if device_id in device_registry.devices:
-        device = device_registry.async_get(device_id)
-        if device is not None:
-            if not _is_own_or_unknown_entry(hass, device.primary_config_entry):
-                return device_id
-            composite_id = device.composite_device_id
+    device = device_registry.async_get(
+        device_id, include_child_devices=False, include_composite_devices=False
+    )
+    if device is not None:
+        if not _is_own_or_unknown_entry(hass, device.primary_config_entry):
+            return device_id
+        composite_id = device.composite_device_id
     else:
         # Not a concrete device: this is a pre-2026.8 merged-device id.
         composite_id = device_id
 
     if composite_id is not None:
-        for split in device_registry.devices.get_devices_for_composite_device_id(
+        for split in device_registry.async_get_devices_for_composite_device_id(
             composite_id
         ):
             if not _is_own_or_unknown_entry(hass, split.primary_config_entry):
                 return split.id
 
     # Last resort: match hardware identity against a concrete device.
-    reference = device_registry.async_get(device_id)
+    reference = device_registry.async_get(device_id, include_child_devices=False)
     if reference is not None:
-        for candidate in device_registry.devices.values():
-            if _is_own_or_unknown_entry(hass, candidate.primary_config_entry):
-                continue
-            if (
-                reference.identifiers & candidate.identifiers
-                or reference.connections & candidate.connections
-            ):
+        for candidate in device_registry.async_get_devices(
+            identifiers=reference.identifiers, connections=reference.connections
+        ):
+            if not _is_own_or_unknown_entry(hass, candidate.primary_config_entry):
                 return candidate.id
 
     return None

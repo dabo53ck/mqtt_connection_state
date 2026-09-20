@@ -30,7 +30,7 @@ async def async_discover_devices(hass: HomeAssistant) -> list[DeviceEntry]:
 
     device_registry = dr.async_get(hass)
 
-    for device_entry in device_registry.devices.values():
+    for device_entry in device_registry.devices:
         # Skip disabled devices
         if device_entry.disabled:
             continue
