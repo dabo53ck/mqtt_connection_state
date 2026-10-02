@@ -11,3 +11,7 @@ venv/
 htmlcov/
 *.egg-info/
 .DS_Store
+
+# Local assistant notes: never published
+CLAUDE.md
+.claude/
