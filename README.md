@@ -152,6 +152,8 @@ OR
 
 * If you delete the MQTT device a connection sensor belongs to, its entry is removed
   automatically after 5 minutes
+* Entries whose device is already gone when Home Assistant starts (e.g. deleted
+  with an earlier version) are removed the same way, 5 minutes after start
 * If the device comes back in the meantime (e.g. Zigbee2MQTT re-publishes its
   discovery), the entry is kept
 

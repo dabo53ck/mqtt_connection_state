@@ -314,35 +314,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def _async_remove_entry_if_device_gone(_now: datetime) -> None:
         nonlocal cancel_removal
         cancel_removal = None
-        if device_registry.async_get(
-            tracked_device_id,
-            include_child_devices=False,
-            include_composite_devices=False,
-        ):
+        if device_registry.async_get(tracked_device_id):
             return
         _LOGGER.info(
-            "Source device of %s was removed, removing its connection state entry",
+            "Source device of %s is gone, removing its connection state entry",
             entry.title,
         )
         hass.async_create_task(hass.config_entries.async_remove(entry.entry_id))
 
     @callback
-    def _async_device_registry_updated(event: Event[EventStateChangedData]) -> None:
+    def _async_schedule_removal() -> None:
+        # Zigbee2MQTT can clear and re-publish its discovery, which removes and
+        # re-adds the device with the same id; only act if it stays gone.
         nonlocal cancel_removal
+        _async_cancel_removal()
+        cancel_removal = async_call_later(
+            hass, DEVICE_REMOVED_GRACE, _async_remove_entry_if_device_gone
+        )
+
+    @callback
+    def _async_device_registry_updated(event: Event[EventStateChangedData]) -> None:
         action = event.data.get("action")
         if action == "update":
             changes = event.data.get("changes", {})
             if "name" in changes or "name_by_user" in changes:
                 _update_entry_title()
         elif action == "remove":
-            # Zigbee2MQTT can clear and re-publish its discovery, which removes
-            # and re-adds the device with the same id; only act if it stays gone.
-            _async_cancel_removal()
-            cancel_removal = async_call_later(
-                hass, DEVICE_REMOVED_GRACE, _async_remove_entry_if_device_gone
-            )
+            _async_schedule_removal()
 
     _update_entry_title()
+
+    # An entry whose device is already gone (deleted while this was not
+    # watching, or left behind by an earlier version) gets the same treatment.
+    if device_registry.async_get(tracked_device_id) is None:
+        _async_schedule_removal()
 
     unsub = async_track_device_registry_updated_event(
         hass, [tracked_device_id], _async_device_registry_updated
