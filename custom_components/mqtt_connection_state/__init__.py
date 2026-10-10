@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import logging
 
@@ -15,6 +16,7 @@ from homeassistant.components.mqtt import (
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import (
+    CALLBACK_TYPE,
     Event,
     EventStateChangedData,
     HomeAssistant,
@@ -32,6 +34,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_device_registry_updated_event,
     async_track_time_interval,
 )
@@ -45,6 +48,7 @@ from .const import (
     CONF_DISCOVERY_INTERVAL,
     CONF_KIND,
     CONF_TOPIC,
+    DEVICE_REMOVED_GRACE,
     DOMAIN,
     KIND_SYSTEM,
     SERV_ADD_NEW_DEVICES,
@@ -297,12 +301,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("Change entry title: %s ->%s", entry.title, device_name)
             hass.config_entries.async_update_entry(entry, title=device_name)
 
+    cancel_removal: CALLBACK_TYPE | None = None
+
+    @callback
+    def _async_cancel_removal() -> None:
+        nonlocal cancel_removal
+        if cancel_removal is not None:
+            cancel_removal()
+            cancel_removal = None
+
+    @callback
+    def _async_remove_entry_if_device_gone(_now: datetime) -> None:
+        nonlocal cancel_removal
+        cancel_removal = None
+        if device_registry.async_get(
+            tracked_device_id,
+            include_child_devices=False,
+            include_composite_devices=False,
+        ):
+            return
+        _LOGGER.info(
+            "Source device of %s was removed, removing its connection state entry",
+            entry.title,
+        )
+        hass.async_create_task(hass.config_entries.async_remove(entry.entry_id))
+
     @callback
     def _async_device_registry_updated(event: Event[EventStateChangedData]) -> None:
-        if event.data.get("action") == "update":
+        nonlocal cancel_removal
+        action = event.data.get("action")
+        if action == "update":
             changes = event.data.get("changes", {})
             if "name" in changes or "name_by_user" in changes:
                 _update_entry_title()
+        elif action == "remove":
+            # Zigbee2MQTT can clear and re-publish its discovery, which removes
+            # and re-adds the device with the same id; only act if it stays gone.
+            _async_cancel_removal()
+            cancel_removal = async_call_later(
+                hass, DEVICE_REMOVED_GRACE, _async_remove_entry_if_device_gone
+            )
 
     _update_entry_title()
 
@@ -310,6 +348,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, [tracked_device_id], _async_device_registry_updated
     )
     entry.async_on_unload(unsub)
+    entry.async_on_unload(_async_cancel_removal)
 
     await hass.config_entries.async_forward_entry_setups(
         entry, [Platform.BINARY_SENSOR]

@@ -22,6 +22,9 @@ CONF_DISCOVERY_INTERVAL = timedelta(minutes=10)
 CONF_ERROR_BASE = "base"
 CONF_TOPIC = "topic"
 
+# How long a deleted source device may stay gone before its entry is removed.
+DEVICE_REMOVED_GRACE = timedelta(minutes=5)
+
 # Marks the single, auto-created config entry that owns the broker/bridge sensors
 # (as opposed to the per-device entries, which carry CONF_DEVICE_ID/CONF_TOPIC).
 CONF_KIND = "kind"

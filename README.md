@@ -148,6 +148,13 @@ OR
   `mqtt_connection_state.remove_duplicate_entries` action
   (`dry_run` defaults to a safe preview; set `dry_run: false` to remove)
 
+### 🧹 Cleanup when a device is deleted
+
+* If you delete the MQTT device a connection sensor belongs to, its entry is removed
+  automatically after 5 minutes
+* If the device comes back in the meantime (e.g. Zigbee2MQTT re-publishes its
+  discovery), the entry is kept
+
 ### 🩺 Broker & Bridge monitoring
 
 Two extra sensors appear automatically (no setup) to catch outages the per-device
