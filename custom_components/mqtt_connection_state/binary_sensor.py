@@ -220,7 +220,7 @@ class MqttConnectionSensorEntity(BinarySensorEntity):
 
             new_device_entry = device_registry.async_get(self._device_id)
             if (
-                new_device_entry.primary_config_entry if new_device_entry else None
+                new_device_entry.config_entry_id if new_device_entry else None
             ) is None:
                 return
 

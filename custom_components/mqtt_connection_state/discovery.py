@@ -40,7 +40,7 @@ async def async_discover_devices(hass: HomeAssistant) -> list[DeviceEntry]:
             continue
 
         # Skip devices this integration owns (leftover duplicate/fork devices)
-        owner = hass.config_entries.async_get_entry(device_entry.primary_config_entry)
+        owner = hass.config_entries.async_get_entry(device_entry.config_entry_id)
         if owner is not None and owner.domain == DOMAIN:
             continue
 
