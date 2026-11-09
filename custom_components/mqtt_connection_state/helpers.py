@@ -52,7 +52,7 @@ def resolve_source_device_id(
         device_id, include_child_devices=False, include_composite_devices=False
     )
     if device is not None:
-        if not _is_own_or_unknown_entry(hass, device.primary_config_entry):
+        if not _is_own_or_unknown_entry(hass, device.config_entry_id):
             return device_id
         composite_id = device.composite_device_id
     else:
@@ -63,7 +63,7 @@ def resolve_source_device_id(
         for split in device_registry.async_get_devices_for_composite_device_id(
             composite_id
         ):
-            if not _is_own_or_unknown_entry(hass, split.primary_config_entry):
+            if not _is_own_or_unknown_entry(hass, split.config_entry_id):
                 return split.id
 
     # Last resort: match hardware identity against a concrete device.
@@ -72,7 +72,7 @@ def resolve_source_device_id(
         for candidate in device_registry.async_get_devices(
             identifiers=reference.identifiers, connections=reference.connections
         ):
-            if not _is_own_or_unknown_entry(hass, candidate.primary_config_entry):
+            if not _is_own_or_unknown_entry(hass, candidate.config_entry_id):
                 return candidate.id
 
     return None
